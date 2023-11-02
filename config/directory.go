@@ -33,7 +33,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"io/fs"
 	"io/ioutil"
 	"strings"
 )
@@ -138,7 +137,7 @@ func FromDirectory(dirpath string) (*Config, error) {
 		return nil, err
 	}
 	config.Rosters, err = loadConfigFile(filepath.Join(dirpath, "rosters"))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 	return config, nil
