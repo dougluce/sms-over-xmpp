@@ -40,6 +40,7 @@ import (
 	"src.agwa.name/sms-over-xmpp/config"
 	_ "src.agwa.name/sms-over-xmpp/providers/twilio"
 	_ "src.agwa.name/sms-over-xmpp/providers/nexmo"
+	_ "src.agwa.name/sms-over-xmpp/providers/telnyx"
 )
 
 func main() {

@@ -89,7 +89,7 @@ func (provider *Provider) handleMessage(w http.ResponseWriter, req *http.Request
 	}
 	if err := provider.service.Receive(&message); err != nil {
 		// TODO: log the error
-		http.Error(w, "500 Internal Server Error: failed to receive message", 500)
+		http.Error(w, fmt.Sprintf("500 Internal Server Error: failed to receive message: %s", err), 500)
 		return
 	}
 	// Note: while Twilio is OK with a 204 response, SignalWire requires this

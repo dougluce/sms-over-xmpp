@@ -253,6 +253,7 @@ func (service *Service) Receive(message *Message) error {
 		return errors.New("Unknown phone number " + message.To)
 	}
 	from := xmpp.Address{service.friendlyPhoneNumber(message.From), service.xmppParams.Domain, ""}
+  log.Printf("Received from %s to %s: %s\n", message.From, message.To, message.Body)
 
 	if err := service.sendXMPPChat(from, address, message.Body); err != nil {
 		return err
@@ -289,7 +290,7 @@ func (service *Service) sendXMPPMediaURL(from xmpp.Address, to xmpp.Address, med
 			From: &from,
 			To:   &to,
 		},
-		Body: mediaURL,
+		Body: fmt.Sprintf("[MEDIAURL] %s", mediaURL),
 		Type: xmpp.CHAT,
 		OutOfBandData: &xmpp.OutOfBandData{URL: mediaURL},
 	}
