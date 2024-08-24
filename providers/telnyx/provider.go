@@ -2,11 +2,10 @@ package telnyx
 
 import (
 	"net/http"
-	"net/url"
-	"strings"
 	"fmt"
 	"io/ioutil"
 	"encoding/json"
+  "bytes"
 
 	"src.agwa.name/sms-over-xmpp"
 )
@@ -14,9 +13,26 @@ import (
 type Provider struct {
 	service      *smsxmpp.Service
 
-	apiKey       string
-	apiSecret    string
-	httpPassword string
+	ApiUrl       string
+	ApiKey       string
+
+}
+
+type inboundSMS struct {
+  Data struct {
+    Payload struct {
+      From struct {
+        PhoneNumber string `json:"phone_number"`
+      }
+      To []struct {
+        PhoneNumber string `json:"phone_number"`
+      }
+      Text string
+      Media []struct {
+        Url string
+      }
+    }
+  }
 }
 
 func (provider *Provider) Type() string {
@@ -24,38 +40,55 @@ func (provider *Provider) Type() string {
 }
 
 func (provider *Provider) Send(message *smsxmpp.Message) error {
-	request := make(url.Values)
-	request.Set("api_key", provider.apiKey)
-	request.Set("api_secret", provider.apiSecret)
-	request.Set("from", strings.TrimPrefix(message.From, "+"))
-	request.Set("to", strings.TrimPrefix(message.To, "+"))
-	request.Set("text", message.Body)
-	if !isASCII(message.Body) {
-		// TODO: test non-ASCII messages
-		request.Set("type", "unicode")
-	}
-
-	response, err := provider.sendSMS(request)
+	postBody, err := json.Marshal(map[string]string{
+		"from":                 message.From,
+		"to":                   message.To,
+		"text":                 message.Body,
+	})
 	if err != nil {
 		return err
 	}
 
-	for _, message := range response.Messages {
-		if message.Status != "0" {
-			return fmt.Errorf("Error sending SMS (%s): %s", message.Status, sendSMSStatuses[message.Status])
-		}
+	// create request
+	req, _ := http.NewRequest("POST", provider.ApiUrl+"/messages", bytes.NewBuffer(postBody))
+	req.Header.Add("Authorization", "Bearer "+provider.ApiKey)
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-type", "application/json")
+
+	// make request
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	// read json body
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	// unserialize json body
+	unmarshaled := map[string]interface{}{}
+	err = json.Unmarshal(body, &unmarshaled)
+	if err != nil {
+		return err
+	}
+
+	// if status code 200
+	if res.StatusCode == 200 {
+		return fmt.Errorf("%s",unmarshaled["data"].(map[string]interface{}))
+	} else {
+		return nil
+  }
 }
 
 func (provider *Provider) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/message", provider.handleInboundSMS)
+	mux.HandleFunc("/message", provider.handleMessage)
   return mux
 }
 
-func (provider *Provider) handleInboundSMS(w http.ResponseWriter, req *http.Request) {
+func (provider *Provider) handleMessage(w http.ResponseWriter, req *http.Request) {
 	requestBytes, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		http.Error(w, "400 Bad Request: unable to read request body", 400)
@@ -88,9 +121,8 @@ func (provider *Provider) handleInboundSMS(w http.ResponseWriter, req *http.Requ
 func MakeProvider(service *smsxmpp.Service, config smsxmpp.ProviderConfig) (smsxmpp.Provider, error) {
 	return &Provider{
 		service: service,
-		apiKey: config["api_key"],
-		apiSecret: config["api_secret"],
-		httpPassword: config["http_password"],
+		ApiUrl: config["api_url"],
+		ApiKey: config["api_key"],
 	}, nil
 }
 
