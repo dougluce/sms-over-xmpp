@@ -3,6 +3,7 @@ package telnyx
 import (
 	"net/http"
 	"fmt"
+  "log"
 	"io/ioutil"
 	"encoding/json"
   "bytes"
@@ -20,6 +21,7 @@ type Provider struct {
 
 type inboundSMS struct {
   Data struct {
+    Eventtype string `json:"event_type"`
     Payload struct {
       From struct {
         PhoneNumber string `json:"phone_number"`
@@ -75,11 +77,10 @@ func (provider *Provider) Send(message *smsxmpp.Message) error {
 	}
 
 	// if status code 200
-	if res.StatusCode == 200 {
-		return fmt.Errorf("%s",unmarshaled["data"].(map[string]interface{}))
-	} else {
-		return nil
+	if res.StatusCode != 200 {
+    return fmt.Errorf("%s",unmarshaled["data"].(map[string]interface{}))
   }
+  return nil
 }
 
 func (provider *Provider) HTTPHandler() http.Handler {
@@ -111,10 +112,14 @@ func (provider *Provider) handleMessage(w http.ResponseWriter, req *http.Request
 		Body: msg.Data.Payload.Text,
     MediaURLs: urls,
 	}
-	if err := provider.service.Receive(&message); err != nil {
-		http.Error(w, fmt.Sprintf("500 Internal Server Error: failed to receive message: %#v", err), 500)
-		return
-	}
+  if msg.Data.Eventtype == "message.received" {
+    if err := provider.service.Receive(&message); err != nil {
+      http.Error(w, fmt.Sprintf("500 Internal Server Error: failed to receive message: %#v", err), 500)
+      return
+    }
+  } else {
+    log.Printf("telnyx %s: %s -> %s\n", msg.Data.Eventtype, msg.Data.Payload.From.PhoneNumber, msg.Data.Payload.To[0].PhoneNumber)
+  }
 	w.WriteHeader(204)
 }
 
